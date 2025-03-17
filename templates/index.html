@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice AI</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <!-- Application CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="app-logo">
+                    <i class="bi bi-file-earmark-text"></i>
+                    <span>Invoice AI</span>
+                </div>
+            </div>
+            
+            <div class="sidebar-content">
+                <div class="nav-section">
+                    <h6 class="nav-section-title">MAIN</h6>
+                    <nav class="nav-menu">
+                        <a href="#dashboard" class="nav-link active">
+                            <i class="bi bi-grid-1x2"></i>
+                            <span>Dashboard</span>
+                        </a>
+                        <a href="#upload" class="nav-link">
+                            <i class="bi bi-cloud-upload"></i>
+                            <span>Upload Invoice</span>
+                        </a>
+                        <a href="#extractions" class="nav-link">
+                            <i class="bi bi-list-ul"></i>
+                            <span>Previous Extractions</span>
+                        </a>
+                    </nav>
+                </div>
+                
+                <div class="nav-section">
+                    <h6 class="nav-section-title">SUPPORT</h6>
+                    <nav class="nav-menu">
+                        <a href="#help" class="nav-link">
+                            <i class="bi bi-question-circle"></i>
+                            <span>Help & Documentation</span>
+                        </a>
+                    </nav>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Mobile Menu Toggle -->
+            <button id="mobileSidebarToggle" class="mobile-sidebar-toggle">
+                <i class="bi bi-list"></i>
+            </button>
+
+            <!-- Content Sections -->
+            <div class="content-wrapper">
+                <!-- Dashboard Section -->
+                <section id="dashboard" class="content-section active">
+                    <div class="section-header">
+                        <h1>Dashboard</h1>
+                        <p class="section-description">Monitor your invoice extraction activity</p>
+                    </div>
+
+                    <div class="dashboard-stats">
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="bi bi-file-earmark-text"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h2 id="totalInvoices">0</h2>
+                                <p>Processed Invoices</p>
+                                <span class="stat-change">↑0% from last month</span>
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="bi bi-check-circle"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h2 id="successRate">0%</h2>
+                                <p>Success Rate</p>
+                                <span class="stat-change">↑0% from last month</span>
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="bi bi-lightning"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h2 id="avgProcessingTime">0s</h2>
+                                <p>Avg. Processing Time</p>
+                                <span class="stat-change">↓0% from last month</span>
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="bi bi-calendar-check"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h2 id="activeToday">0</h2>
+                                <p>Active Today</p>
+                                <span class="stat-change">↑0% from yesterday</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="section-card recent-uploads">
+                        <div class="card-header">
+                            <h2>Recent Uploads</h2>
+                            <a href="#extractions" class="view-all">View All →</a>
+                        </div>
+                        <div class="empty-state" id="recentUploadsEmpty">
+                            <p>No recent uploads found. Upload an invoice to get started.</p>
+                        </div>
+                        <div class="table-responsive" id="recentUploadsTable" style="display: none;">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>File</th>
+                                        <th>Company</th>
+                                        <th>Invoice #</th>
+                                        <th>Date</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recentUploadsTableBody">
+                                    <!-- Dynamic content will be added here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="section-card">
+                        <div class="card-header">
+                            <h2>Ready to process a new invoice?</h2>
+                        </div>
+                        <div class="card-content">
+                            <p>Upload a new invoice to extract data automatically.</p>
+                            <a href="#upload" class="btn btn-primary">
+                                <i class="bi bi-cloud-upload"></i> Upload Invoice
+                            </a>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Upload Section -->
+                <section id="upload" class="content-section">
+                    <div class="section-header">
+                        <h1>Upload Invoice</h1>
+                        <p class="section-description">Submit your invoice PDFs for data extraction</p>
+                    </div>
+
+                    <div class="upload-area" id="uploadArea">
+                        <div class="dropzone" id="dropzone">
+                            <div class="dropzone-icon">
+                                <i class="bi bi-cloud-arrow-up"></i>
+                            </div>
+                            <h3>Drag & Drop PDF Invoices Here</h3>
+                            <p>Or click to browse your files</p>
+                            <button id="browseButton" class="btn btn-primary">Browse Files</button>
+                            <input type="file" id="fileInput" accept=".pdf" multiple style="display: none;">
+                        </div>
+                        
+                        <div class="file-preview" id="filePreview" style="display: none;">
+                            <div class="file-info">
+                                <div class="file-icon">
+                                    <i class="bi bi-file-earmark-pdf"></i>
+                                </div>
+                                <div class="file-details">
+                                    <h4 id="fileName">filename.pdf</h4>
+                                    <p id="fileSize">0 KB</p>
+                                </div>
+                            </div>
+                            <div class="file-actions">
+                                <button id="uploadButton" class="btn btn-primary">Process File</button>
+                                <button id="cancelButton" class="btn btn-outline-secondary">Cancel</button>
+                            </div>
+                        </div>
+
+                        <div class="upload-progress" id="uploadProgress" style="display: none;">
+                            <div class="progress">
+                                <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                            </div>
+                            <p class="mt-2 text-center">Processing your invoice...</p>
+                        </div>
+                    </div>
+
+                    <div class="section-card" id="uploadInfo">
+                        <div class="card-header">
+                            <h2>Supported Invoice Types</h2>
+                        </div>
+                        <div class="card-content">
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <div class="stat-icon me-2" style="width: 32px; height: 32px;">
+                                            <i class="bi bi-check-circle"></i>
+                                        </div>
+                                        <h5 class="mb-0">PDF Invoices</h5>
+                                    </div>
+                                    <p>We support standard PDF format invoices from any vendor.</p>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <div class="stat-icon me-2" style="width: 32px; height: 32px;">
+                                            <i class="bi bi-check-circle"></i>
+                                        </div>
+                                        <h5 class="mb-0">Multiple Pages</h5>
+                                    </div>
+                                    <p>We can process multi-page invoices and extract all relevant data.</p>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <div class="stat-icon me-2" style="width: 32px; height: 32px;">
+                                            <i class="bi bi-check-circle"></i>
+                                        </div>
+                                        <h5 class="mb-0">Template Recognition</h5>
+                                    </div>
+                                    <p>Our system can recognize and adapt to different invoice templates.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Previous Extractions Section -->
+                <section id="extractions" class="content-section">
+                    <div class="section-header">
+                        <h1>Previous Extractions</h1>
+                        <p class="section-description">View and manage your processed invoices</p>
+                    </div>
+
+                    <div class="section-card">
+                        <div class="card-header">
+                            <h2>Recent Extractions</h2>
+                        </div>
+                        <div class="empty-state" id="noExtractionsMessage">
+                            <p>No previous extractions found. Upload an invoice to get started.</p>
+                        </div>
+                        <div class="table-responsive" id="extractionsTable" style="display: none;">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>File</th>
+                                        <th>Company</th>
+                                        <th>Invoice #</th>
+                                        <th>Date</th>
+                                        <th>Amount</th>
+                                        <th>Confidence</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="extractionsTableBody">
+                                    <!-- Dynamic content will be added here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Help Section -->
+                <section id="help" class="content-section">
+                    <div class="section-header">
+                        <h1>Help & Documentation</h1>
+                        <p class="section-description">Learn how to use Invoice AI effectively</p>
+                    </div>
+
+                    <div class="section-card">
+                        <div class="card-header">
+                            <h2>Getting Started</h2>
+                        </div>
+                        <div class="card-content">
+                            <div class="guide-step">
+                                <h3>1. Upload Your Invoice</h3>
+                                <p>Go to the Upload page and either drag & drop your PDF invoice or click to browse and select it. Our system accepts standard PDF invoices from any vendor.</p>
+                            </div>
+                            <div class="guide-step">
+                                <h3>2. View Extraction Results</h3>
+                                <p>After processing, you'll see the extracted data displayed in a structured format. We extract key information like vendor details, invoice numbers, line items, and totals.</p>
+                            </div>
+                            <div class="guide-step">
+                                <h3>3. Edit & Correct Data</h3>
+                                <p>If any information was extracted incorrectly, you can click on the fields to edit them. The system will learn from your corrections to improve future extractions.</p>
+                            </div>
+                            <div class="guide-step">
+                                <h3>4. Download & Integrate</h3>
+                                <p>Once you've verified the data, download it in JSON format for integration with your accounting or ERP systems.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="section-card">
+                        <div class="card-header">
+                            <h2>Invoice Extraction Features</h2>
+                        </div>
+                        <div class="card-content">
+                            <div class="row">
+                                <div class="col-md-6 mb-4">
+                                    <h4><i class="bi bi-stars"></i> Template Recognition</h4>
+                                    <p>Our system can recognize different invoice formats and templates for more accurate data extraction.</p>
+                                </div>
+                                <div class="col-md-6 mb-4">
+                                    <h4><i class="bi bi-gear"></i> Custom Prompts</h4>
+                                    <p>We use template-specific prompts tailored to each invoice type for improved accuracy.</p>
+                                </div>
+                                <div class="col-md-6 mb-4">
+                                    <h4><i class="bi bi-lightning"></i> Enhanced OCR</h4>
+                                    <p>Advanced OCR with preprocessing ensures better text extraction from all invoice types.</p>
+                                </div>
+                                <div class="col-md-6 mb-4">
+                                    <h4><i class="bi bi-shield-check"></i> Validation Logic</h4>
+                                    <p>Built-in validation ensures extracted data meets expected formats and standards.</p>
+                                </div>
+                                <div class="col-md-6 mb-4">
+                                    <h4><i class="bi bi-graph-up"></i> Confidence Scoring</h4>
+                                    <p>Each extracted field includes a confidence score to highlight potential issues.</p>
+                                </div>
+                                <div class="col-md-6 mb-4">
+                                    <h4><i class="bi bi-bug"></i> Debug Mode</h4>
+                                    <p>Advanced troubleshooting options are available for difficult invoice formats.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Result Section -->
+                <section id="result" class="content-section">
+                    <div class="section-header">
+                        <h1>Extraction Results</h1>
+                        <p class="section-description">Review the extracted data from your invoice</p>
+                        <button id="backToUpload" class="btn btn-outline-primary">
+                            <i class="bi bi-arrow-left"></i> Back to Upload
+                        </button>
+                    </div>
+
+                    <div class="section-card">
+                        <div class="card-header">
+                            <h2 id="resultFileName">Invoice Results</h2>
+                            <div class="confidence-badge" id="confidenceBadge">
+                                85% Confidence
+                            </div>
+                        </div>
+                        <div class="card-content">
+                            <!-- Invoice Metadata -->
+                            <div class="extraction-details">
+                                <div class="detail-section">
+                                    <h3>Invoice Information</h3>
+                                    <div class="detail-grid">
+                                        <div class="detail-item">
+                                            <label>Company Name</label>
+                                            <div id="companyName" class="detail-value">-</div>
+                                        </div>
+                                        <div class="detail-item">
+                                            <label>Invoice Number</label>
+                                            <div id="invoiceNumber" class="detail-value">-</div>
+                                        </div>
+                                        <div class="detail-item">
+                                            <label>Invoice Date</label>
+                                            <div id="invoiceDate" class="detail-value">-</div>
+                                        </div>
+                                        <div class="detail-item">
+                                            <label>FSSAI Number</label>
+                                            <div id="fssaiNumber" class="detail-value">-</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Product Items Table -->
+                                <div class="detail-section">
+                                    <h3>Product Details</h3>
+                                    <div class="table-responsive">
+                                        <table class="table table-striped">
+                                            <thead>
+                                                <tr>
+                                                    <th>Goods Description</th>
+                                                    <th>HSN/SAC Code</th>
+                                                    <th>Quantity</th>
+                                                    <th>Weight</th>
+                                                    <th>Rate</th>
+                                                    <th>Amount</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="productTableBody">
+                                                <!-- Product rows will be inserted here dynamically -->
+                                                <tr>
+                                                    <td colspan="6" class="text-center">No product data available</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="result-actions">
+                                <button id="downloadExcel" class="btn btn-outline-primary">
+                                    <i class="bi bi-download"></i> Download Excel
+                                </button>
+                                <button id="processAnother" class="btn btn-primary">
+                                    <i class="bi bi-arrow-clockwise"></i> Process Another
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- Alert Container -->
+    <div id="alertContainer" class="alert-container"></div>
+
+    <!-- JavaScript Dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Application Scripts -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/results.js') }}"></script>
+</body>
+</html>

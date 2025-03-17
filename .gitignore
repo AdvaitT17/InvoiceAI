@@ -1,0 +1,10 @@
+node_modules
+venv
+.env
+temp_extracted
+__pycache__
+bills
+results
+uploads
+extration_results.json
+pattern_extraction_results.json

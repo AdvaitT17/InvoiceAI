@@ -1,0 +1,138 @@
+{
+  "total_invoices": 3,
+  "successful_extractions": 3,
+  "success_rate": 100.0,
+  "templates_used": {
+    "sai_rice": 1,
+    "birla_rice": 1,
+    "tanishq_agro": 1
+  },
+  "average_confidence": {
+    "company_name": 0.9,
+    "invoice_number": 0.9,
+    "fssai_number": 0.9,
+    "invoice_date": 0.9,
+    "products": 0.26666666666666666,
+    "overall": 0.7733333333333334
+  },
+  "results": [
+    {
+      "filename": "SAIR -AVENUE AMBI 310 (5KG).pdf",
+      "result": {
+        "success": true,
+        "template_used": "sai_rice",
+        "confidence_scores": {
+          "company_name": 0.9,
+          "invoice_number": 0.9,
+          "fssai_number": 0.9,
+          "invoice_date": 0.9,
+          "products": 0.2,
+          "overall": 0.76
+        },
+        "company_name": "SAI RICE MILL",
+        "invoice_number": "310",
+        "fssai_number": "11517060000369",
+        "invoice_date": "22-08-2023",
+        "products": [
+          {
+            "goods_description": "RICE WADA KOLAM\n5*6",
+            "hsn_sac_code": "10063090",
+            "quantity": "34",
+            "weight": "10.20 qtl",
+            "rate": "5,900.00",
+            "amount": "60,180.00",
+            "original_weight": "10.20 qtl",
+            "weight_in_kg": 1019.9999999999999
+          }
+        ],
+        "debug": {
+          "text_length": 4588,
+          "template": "sai_rice",
+          "filename": "SAIR -AVENUE AMBI 310 (5KG).pdf"
+        }
+      }
+    },
+    {
+      "filename": "SHRI BIRLA RICE MILL_VADUNAGAR 26.06.2023 INV.NO.780.pdf",
+      "result": {
+        "success": true,
+        "template_used": "birla_rice",
+        "confidence_scores": {
+          "company_name": 0.9,
+          "invoice_number": 0.9,
+          "fssai_number": 0.9,
+          "invoice_date": 0.9,
+          "products": 0.4,
+          "overall": 0.8
+        },
+        "company_name": "SHRI BIRLA RICE MILL",
+        "invoice_number": "780",
+        "fssai_number": "11515043000924",
+        "invoice_date": "26/06/2023",
+        "products": [
+          {
+            "goods_description": "STEAM KOLAM RICE",
+            "hsn_sac_code": "10063090",
+            "quantity": "26",
+            "weight": "385 kg",
+            "rate": "10010.00",
+            "amount": "460460.00",
+            "original_weight": "385 kg",
+            "weight_in_kg": 385.0
+          },
+          {
+            "goods_description": "JEERA RICE",
+            "hsn_sac_code": "10063090",
+            "quantity": "26",
+            "weight": "77 kg",
+            "rate": "4950",
+            "amount": "99099.00",
+            "original_weight": "77 kg",
+            "weight_in_kg": 77.0
+          }
+        ],
+        "debug": {
+          "text_length": 5441,
+          "template": "birla_rice",
+          "filename": "SHRI BIRLA RICE MILL_VADUNAGAR 26.06.2023 INV.NO.780.pdf"
+        }
+      }
+    },
+    {
+      "filename": "TANI -AVENUE_726__VADUNAVGHR__10Kg.pdf",
+      "result": {
+        "success": true,
+        "template_used": "tanishq_agro",
+        "confidence_scores": {
+          "company_name": 0.9,
+          "invoice_number": 0.9,
+          "fssai_number": 0.9,
+          "invoice_date": 0.9,
+          "products": 0.2,
+          "overall": 0.76
+        },
+        "company_name": "TANISHQ AGRO INDUSTRIES",
+        "invoice_number": "726",
+        "fssai_number": "11518060000388",
+        "invoice_date": "23-08-2023",
+        "products": [
+          {
+            "goods_description": "RICE WADA KOLAM\n(10*4)",
+            "hsn_sac_code": "10063090",
+            "quantity": "75",
+            "weight": "30.00 qtl",
+            "rate": "5,800.00",
+            "amount": "1,74,000.00",
+            "original_weight": "30.00 qtl",
+            "weight_in_kg": 3000.0
+          }
+        ],
+        "debug": {
+          "text_length": 4788,
+          "template": "tanishq_agro",
+          "filename": "TANI -AVENUE_726__VADUNAVGHR__10Kg.pdf"
+        }
+      }
+    }
+  ]
+}
