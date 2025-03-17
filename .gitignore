@@ -6,5 +6,6 @@ __pycache__
 bills
 results
 uploads
-extration_results.json
+extraction_results.json
 pattern_extraction_results.json
+.DS_Store

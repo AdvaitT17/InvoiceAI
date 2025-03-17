@@ -458,7 +458,8 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Load previous results
-    function loadPreviousResults() {
+    function loadPreviousResultsOld() {
+        console.log('Note: Using deprecated loadPreviousResultsOld in main.js');
         fetch('/results')
             .then(response => response.json())
             .then(files => {

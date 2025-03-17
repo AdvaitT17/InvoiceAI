@@ -230,6 +230,7 @@ def get_result_file(filename):
 @app.route('/extraction_history')
 def extraction_history():
     """Get a list of all previously processed invoices"""
+    print("Extraction history endpoint called")
     # Set headers to prevent caching
     response = make_response()
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
@@ -237,12 +238,15 @@ def extraction_history():
     response.headers['Expires'] = '0'
     
     if not os.path.exists('results'):
+        print("Results directory does not exist")
+        os.makedirs('results', exist_ok=True)
         return jsonify({'extractions': []})
     
     extractions = []
     
     # Get list of all result files
     result_files = os.listdir('results')
+    print(f"Found {len(result_files)} files in results directory")
     result_files.sort(reverse=True)  # Sort newest first based on filename
     
     for filename in result_files:
@@ -259,32 +263,19 @@ def extraction_history():
                 # Try to extract timestamp from filename or use file modification time
                 try:
                     file_mtime = os.path.getmtime(file_path)
-                    timestamp = datetime.fromtimestamp(file_mtime).strftime('%Y-%m-%d %H:%M:%S')
+                    timestamp = datetime.datetime.fromtimestamp(file_mtime).strftime('%Y-%m-%d %H:%M:%S')
                 except:
-                    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 data['timestamp'] = timestamp
-            
-            # Extract total amount from products if available
-            total_amount = '-'
-            if 'products' in data and data['products']:
-                try:
-                    # Sum up all product amounts if they are numbers
-                    amounts = [float(p.get('amount', 0)) for p in data['products'] 
-                              if p.get('amount') and str(p.get('amount')).replace('.', '', 1).isdigit()]
-                    if amounts:
-                        total_amount = f"₹{sum(amounts):.2f}"
-                except Exception as e:
-                    app.logger.error(f"Error calculating total amount: {str(e)}")
             
             # Create a summary entry for this extraction
             entry = {
-                'id': filename,  # Use full filename as ID including extension
+                'id': filename.replace('.json', ''),  # Use filename as ID without extension
                 'filename': data.get('original_filename', filename.replace('.json', '')),
                 'timestamp': data.get('timestamp', '-'),
                 'company_name': data.get('company_name', 'Unknown'),
                 'invoice_number': data.get('invoice_number', '-'),
                 'invoice_date': data.get('invoice_date', '-'),
-                'total_amount': total_amount,
                 'template_used': data.get('template_used', 'Default'),
                 'confidence_overall': data.get('confidence_scores', {}).get('overall', 0)
             }
@@ -294,33 +285,76 @@ def extraction_history():
             # Skip files that can't be processed
             app.logger.error(f"Error loading {filename}: {str(e)}")
     
+    print(f"Returning {len(extractions)} extractions")
     # Return in the format expected by the frontend
-    return jsonify({'extractions': extractions})
+    result = {'extractions': extractions}
+    return jsonify(result)
 
-@app.route('/extraction/<path:extraction_id>')
+@app.route('/extraction/<extraction_id>')
 def get_extraction(extraction_id):
     """Get details for a specific extraction by ID"""
-    # Handle both with and without the .json extension
-    if not extraction_id.endswith('.json'):
-        extraction_id += '.json'
+    print(f"Getting extraction details for ID: {extraction_id}")
     
+    # Try different file paths with and without .json extension
     file_path = os.path.join('results', extraction_id)
-    app.logger.info(f"Fetching extraction from path: {file_path}")
-    
     if not os.path.exists(file_path):
-        app.logger.error(f"Extraction file not found: {file_path}")
-        return jsonify({'error': 'Extraction not found'}), 404
+        # Try with .json extension
+        file_path_with_ext = os.path.join('results', f"{extraction_id}.json")
+        if os.path.exists(file_path_with_ext):
+            file_path = file_path_with_ext
+        else:
+            # List files in results directory for debugging
+            print(f"File not found: {file_path}")
+            print(f"File with extension not found: {file_path_with_ext}")
+            print(f"Files in results directory: {os.listdir('results') if os.path.exists('results') else 'results dir not found'}")
+            
+            # Try to find a file that starts with the given ID
+            if os.path.exists('results'):
+                for filename in os.listdir('results'):
+                    if filename.startswith(extraction_id):
+                        file_path = os.path.join('results', filename)
+                        print(f"Found matching file: {filename}")
+                        break
+                else:
+                    return jsonify({'error': 'Extraction not found'}), 404
+            else:
+                return jsonify({'error': 'Extraction not found'}), 404
     
     try:
+        print(f"Opening file: {file_path}")
         with open(file_path, 'r') as f:
             data = json.load(f)
         
-        # Just return the raw data directly
-        # The frontend will format it appropriately
-        return jsonify(data)
+        print(f"Loaded data keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dictionary'}")
+        
+        # Ensure we have the correct structure
+        result = {
+            'filename': data.get('original_filename', extraction_id),
+            'result': {
+                'company_name': data.get('company_name', '-'),
+                'invoice_number': data.get('invoice_number', '-'),
+                'invoice_date': data.get('invoice_date', '-'),
+                'fssai_number': data.get('fssai_number', '-'),
+                'products': data.get('products', []),
+                'confidence_scores': data.get('confidence_scores', {
+                    'overall': 0,
+                    'company_name': 0,
+                    'invoice_number': 0,
+                    'fssai_number': 0,
+                    'invoice_date': 0,
+                    'products': 0
+                }),
+                'template_used': data.get('template_used', 'unknown')
+            }
+        }
+        
+        print(f"Returning result with keys: {list(result.keys())}")
+        return jsonify(result)
         
     except Exception as e:
-        app.logger.error(f"Error reading extraction file {file_path}: {str(e)}")
+        print(f"Error getting extraction: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 @app.route('/download/excel', methods=['POST'])

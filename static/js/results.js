@@ -526,7 +526,8 @@ function storeBatchResults(results) {
 /**
  * Load previous results
  */
-function loadPreviousResults() {
+function loadPreviousResultsFromResults() {
+    console.log('Note: Using deprecated loadPreviousResultsFromResults in results.js');
     const previousResults = JSON.parse(sessionStorage.getItem('previousResults')) || [];
     const tableBody = document.getElementById('previousResultsTable');
     

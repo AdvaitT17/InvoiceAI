@@ -78,9 +78,10 @@ function initNavigation() {
                 // Navigate to extractions section (batch results)
                 navigateTo('extractions');
             } else {
-                // Standard behavior - go back to upload
-                navigateTo('upload');
-                resetUploadArea();
+                // Navigate to extractions section
+                navigateTo('extractions');
+                // Refresh the extractions list
+                loadPreviousResults();
             }
         });
     }
@@ -579,9 +580,6 @@ function populateResults(data) {
         downloadExcelButton.parentNode.replaceChild(newButton, downloadExcelButton);
         
         newButton.addEventListener('click', function() {
-            // Show loading indicator
-            showAlert('Generating Excel file...', 'info');
-            
             // Create a filtered data object with only the required fields
             const extractedData = {
                 company_name: data.company_name || null,
@@ -590,8 +588,6 @@ function populateResults(data) {
                 fssai_number: data.fssai_number || null,
                 products: data.products || []
             };
-            
-            console.log('Sending data for Excel export:', extractedData);
             
             // Send request to server to generate Excel file
             fetch('/download/excel', {
@@ -605,14 +601,14 @@ function populateResults(data) {
                 if (response.ok) {
                     return response.blob();
                 }
-                throw new Error(`Failed to generate Excel file: ${response.status} ${response.statusText}`);
+                throw new Error('Failed to generate Excel file');
             })
             .then(blob => {
                 // Create a download link for the Excel file
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `invoice_data_${data.invoice_number || Date.now()}.xlsx`;
+                a.download = `invoice_data_${Date.now()}.xlsx`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -622,7 +618,7 @@ function populateResults(data) {
             })
             .catch(error => {
                 console.error('Error generating Excel file:', error);
-                showAlert(`Failed to generate Excel file: ${error.message}`, 'danger');
+                showAlert('Failed to generate Excel file', 'danger');
             });
         });
     }
@@ -708,39 +704,90 @@ function initAlerts() {
 
 /**
  * Show an alert message
+ * @param {string} message - The message to display
+ * @param {string} type - The alert type (info, success, warning, danger)
+ * @param {string|null} updateId - Optional ID of an existing alert to update instead of creating a new one
+ * @returns {string} - The ID of the created/updated alert
  */
-function showAlert(message, type = 'info') {
+function showAlert(message, type = 'info', updateId = null) {
     const alertContainer = document.getElementById('alertContainer');
     
-    if (!alertContainer) return;
+    if (!alertContainer) return null;
     
-    // Create alert element
-    const alert = document.createElement('div');
-    alert.className = `alert alert-${type}`;
-    
-    // Add icon based on type
+    // Get icon based on type
     let icon = 'info-circle';
     if (type === 'success') icon = 'check-circle';
     if (type === 'warning') icon = 'exclamation-triangle';
     if (type === 'danger') icon = 'exclamation-circle';
     
-    alert.innerHTML = `
-        <div class="d-flex align-items-center">
-            <i class="bi bi-${icon} me-2"></i>
-            <div>${message}</div>
-            <button type="button" class="btn-close ms-auto" aria-label="Close"></button>
-        </div>
-    `;
+    let alert;
+    let isNew = true;
     
-    // Add alert to container
-    alertContainer.appendChild(alert);
+    // If updateId provided, try to find and update existing alert
+    if (updateId) {
+        alert = document.getElementById(updateId);
+        if (alert) {
+            isNew = false;
+            
+            // Apply transition effect
+            alert.style.transition = 'opacity 0.3s';
+            alert.style.opacity = '0.5';
+            
+            // Update alert class for new type
+            alert.className = `alert alert-${type}`;
+            
+            // Update content with animation
+            setTimeout(() => {
+                // Update the inner HTML
+                alert.innerHTML = `
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-${icon} me-2"></i>
+                        <div>${message}</div>
+                        <button type="button" class="btn-close ms-auto" aria-label="Close"></button>
+                    </div>
+                `;
+                
+                // Fade back in
+                alert.style.opacity = '1';
+                
+                // Re-add closing functionality
+                const closeButton = alert.querySelector('.btn-close');
+                if (closeButton) {
+                    closeButton.addEventListener('click', function() {
+                        alert.remove();
+                    });
+                }
+            }, 300);
+        }
+    }
     
-    // Add closing functionality
-    const closeButton = alert.querySelector('.btn-close');
-    if (closeButton) {
-        closeButton.addEventListener('click', function() {
-            alert.remove();
-        });
+    // If no existing alert found or no updateId provided, create a new one
+    if (isNew) {
+        // Generate a unique ID for this alert
+        const alertId = 'alert-' + Date.now();
+        
+        // Create new alert element
+        alert = document.createElement('div');
+        alert.id = alertId;
+        alert.className = `alert alert-${type}`;
+        alert.innerHTML = `
+            <div class="d-flex align-items-center">
+                <i class="bi bi-${icon} me-2"></i>
+                <div>${message}</div>
+                <button type="button" class="btn-close ms-auto" aria-label="Close"></button>
+            </div>
+        `;
+        
+        // Add alert to container
+        alertContainer.appendChild(alert);
+        
+        // Add closing functionality
+        const closeButton = alert.querySelector('.btn-close');
+        if (closeButton) {
+            closeButton.addEventListener('click', function() {
+                alert.remove();
+            });
+        }
     }
     
     // Auto-remove alert after 5 seconds
@@ -752,28 +799,46 @@ function showAlert(message, type = 'info') {
             }
         }, 300);
     }, 5000);
+    
+    // Return the alert ID so it can be referenced for updates
+    return alert.id;
 }
 
 /**
  * Load previous extraction results for the history section
  */
 function loadPreviousResults() {
+    console.log('Loading previous extractions from app.js');
     const extractionsTable = document.getElementById('extractionsTable');
     const noExtractionsMessage = document.getElementById('noExtractionsMessage');
     const extractionsTableBody = document.getElementById('extractionsTableBody');
     
-    if (!extractionsTable || !noExtractionsMessage || !extractionsTableBody) return;
+    if (!extractionsTable || !noExtractionsMessage || !extractionsTableBody) {
+        console.warn('Missing required DOM elements for extraction history');
+        return;
+    }
+    
+    // Show loading state
+    noExtractionsMessage.textContent = 'Loading extractions...';
+    noExtractionsMessage.style.display = 'block';
+    extractionsTable.style.display = 'none';
     
     // Fetch previous results
     fetch('/extraction_history')
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
-            console.log('Extraction history data:', data); // Debug log
+            console.log('Extraction history data:', data);
             
-            // Check if data contains extractions array
-            const extractions = data.extractions || [];
-            
-            if (extractions && extractions.length > 0) {
+            // Check if data has extractions property and it's not empty
+            if (data && data.extractions && data.extractions.length > 0) {
+                // Use the extractions array from the response
+                const extractions = data.extractions;
+                
                 // We have data, show the table
                 extractionsTable.style.display = 'block';
                 noExtractionsMessage.style.display = 'none';
@@ -785,20 +850,15 @@ function loadPreviousResults() {
                 extractions.forEach(extraction => {
                     const row = document.createElement('tr');
                     
-                    // Calculate confidence display value
-                    const confidenceValue = extraction.confidence_overall || 0;
-                    const confidencePercent = Math.round(confidenceValue * 100);
-                    
                     // Format the row
                     row.innerHTML = `
                         <td>${extraction.filename || 'Unknown File'}</td>
                         <td>${extraction.company_name || '-'}</td>
                         <td>${extraction.invoice_number || '-'}</td>
                         <td>${extraction.invoice_date || '-'}</td>
-                        <td>${extraction.total_amount || '-'}</td>
                         <td>
-                            <span class="confidence-badge" style="background-color: ${getConfidenceColor(confidenceValue)}">
-                                ${confidencePercent}%
+                            <span class="confidence-badge" style="background-color: ${getConfidenceColor(extraction.confidence_overall)}">
+                                ${Math.round((extraction.confidence_overall || 0) * 100)}%
                             </span>
                         </td>
                         <td>
@@ -818,15 +878,22 @@ function loadPreviousResults() {
                         viewExtraction(extractionId);
                     });
                 });
+                
+                console.log('Loaded and displayed extraction history');
             } else {
                 // No data, show the empty message
+                console.log('No extraction data found');
                 extractionsTable.style.display = 'none';
+                noExtractionsMessage.textContent = 'No previous extractions found. Upload an invoice to get started.';
                 noExtractionsMessage.style.display = 'block';
             }
         })
         .catch(error => {
             console.error('Error loading extraction history:', error);
-            showAlert('Failed to load extraction history', 'danger');
+            extractionsTable.style.display = 'none';
+            noExtractionsMessage.textContent = 'Error loading extractions. Please try again.';
+            noExtractionsMessage.style.display = 'block';
+            showAlert('Failed to load extraction history: ' + error.message, 'danger');
         });
 }
 
@@ -848,18 +915,19 @@ function getConfidenceColor(confidence) {
  * View a specific extraction
  */
 function viewExtraction(id) {
-    // Show loading indicator
-    showAlert('Loading extraction details...', 'info');
+    console.log(`Fetching extraction data for ID: ${id}`);
+    // Create a loading alert and store its ID for later updating
+    const alertId = showAlert('Loading extraction...', 'info');
     
-    fetch(`/extraction/${id}.json`)
+    fetch(`/extraction/${id}`)
         .then(response => {
             if (!response.ok) {
-                throw new Error(`Failed to fetch extraction (Status: ${response.status})`);
+                throw new Error(`HTTP error! Status: ${response.status}`);
             }
             return response.json();
         })
         .then(data => {
-            console.log('Extraction data:', data); // Debug log
+            console.log('Extraction data received:', data); // Debug log
             
             // Switch to the result section
             const sections = document.querySelectorAll('.content-section');
@@ -869,33 +937,42 @@ function viewExtraction(id) {
             if (resultSection) {
                 resultSection.classList.add('active');
                 
-                // Create a properly formatted result object for populateResults
-                const formattedResult = {
-                    filename: data.original_filename || id,
-                    company_name: data.company_name || '-',
-                    invoice_number: data.invoice_number || '-',
-                    invoice_date: data.invoice_date || '-',
-                    fssai_number: data.fssai_number || '-',
-                    total_amount: data.total_amount || '-',
-                    products: data.products || [],
-                    confidence_scores: data.confidence_scores || {
-                        overall: 0,
-                        company_name: 0,
-                        invoice_number: 0,
-                        invoice_date: 0,
-                        fssai_number: 0,
-                        products: 0
+                // Data structure handling with better debugging
+                if (data.results && Array.isArray(data.results) && data.results.length > 0) {
+                    console.log('Data has results array, using first item');
+                    const firstResult = data.results[0];
+                    
+                    if (firstResult.result) {
+                        console.log('First result has nested result object');
+                        firstResult.result.filename = firstResult.filename;
+                        populateResults(firstResult.result);
+                    } else {
+                        console.log('Using first result directly');
+                        populateResults(firstResult);
                     }
-                };
+                } else if (data.result) {
+                    console.log('Data has direct result property');
+                    // Add filename from the parent object if needed
+                    if (data.filename && !data.result.filename) {
+                        data.result.filename = data.filename;
+                    }
+                    populateResults(data.result);
+                } else {
+                    console.log('Using data object directly');
+                    populateResults(data);
+                }
                 
-                // Populate the results with our formatted data
-                populateResults(formattedResult);
-                showAlert('Extraction details loaded successfully', 'success');
+                // Update the existing alert to show success, using the same alertId
+                showAlert('Extraction data loaded successfully', 'success', alertId);
+            } else {
+                console.error('Result section not found in DOM');
+                showAlert('Error: Result section not found', 'danger');
             }
         })
         .catch(error => {
             console.error('Error loading extraction:', error);
-            showAlert(`Failed to load extraction details: ${error.message}`, 'danger');
+            // Update the existing alert to show the error, using the same alertId
+            showAlert('Failed to load extraction details: ' + error.message, 'danger', alertId);
         });
 }
 
