@@ -1,6 +1,6 @@
-# Invoice AI - Data Extraction System
+# Invoice AI - Intelligent Invoice Data Extraction System
 
-A Python application that extracts structured data from PDF invoices using OCR and machine learning techniques. The application processes invoices and extracts key information such as company name, invoice number, product details, and more.
+A modern Python application that extracts structured data from PDF invoices using OCR and advanced machine learning techniques. The system processes invoices and extracts key information such as company name, invoice number, product details, and more with high accuracy and confidence scores.
 
 ## Features
 
@@ -16,9 +16,12 @@ A Python application that extracts structured data from PDF invoices using OCR a
   - Invoice Number: Alphanumeric invoice number
   - FSSAI Number: Food Safety and Standards Authority of India license number
   - Date of Invoice: Invoice date in DD/MM/YYYY format
-- Modern web UI for uploading invoices and viewing results
+- Modern, responsive web UI with intuitive navigation
+- Batch processing capabilities for multiple invoices
 - Export functionality for extracted data (JSON, CSV, Excel)
-- Historical results tracking
+- Comprehensive extraction history with search and filter options
+- Confidence score indicators for extraction accuracy
+- Real-time feedback with alert notifications
 
 ## Requirements
 
@@ -61,7 +64,7 @@ python -m spacy download en_core_web_sm
 python app.py
 ```
 
-2. Open a web browser and navigate to: `http://127.0.0.1:5000`
+2. Open a web browser and navigate to: `http://127.0.0.1:3000`
 
 3. Use the web interface to:
    - Upload PDF invoices
@@ -71,25 +74,51 @@ python app.py
 
 ## Project Structure
 
-- `app.py`: Main Flask application
+- `app.py`: Main Flask application with API endpoints
 - `invoice_processor.py`: Core logic for invoice data extraction
 - `templates/`: HTML templates for the web UI
-- `static/`: CSS and JavaScript files
+- `static/`: 
+  - `css/`: Stylesheets for the application
+  - `js/`: JavaScript modules for frontend functionality:
+    - `app.js`: Main application logic
+    - `main.js`: Core UI functionality
+    - `results.js`: Results handling and display
+  - `img/`: Images and icons
 - `uploads/`: Temporary storage for uploaded invoices
-- `results/`: Storage for extracted data
+- `results/`: Storage for extracted data in JSON format
 
 ## How It Works
 
-1. The uploaded PDF is converted to images
-2. OCR is performed on the images to extract text
-3. Rule-based and machine learning techniques are applied to identify key data points
-4. Structured data is extracted and presented to the user
+1. The uploaded PDF is converted to high-resolution images
+2. OCR is performed on the images to extract text with spatial information
+3. Advanced rule-based algorithms and machine learning techniques analyze the text
+4. Template matching identifies known invoice formats for improved accuracy
+5. Structured data is extracted with confidence scores for each field
+6. Results are presented in an intuitive UI with options to export or further process
 
-## Limitations
+## Capabilities and Limitations
 
-- Currently supports PDF invoices only
+### Capabilities
+- Processes PDF invoices with high accuracy
+- Detects and extracts tabular data for product listings
+- Provides confidence scores to indicate extraction reliability
+- Supports batch processing for multiple invoices
+- Maintains extraction history for future reference
+
+### Limitations
+- Currently supports PDF invoices only (image support coming soon)
 - Extraction accuracy depends on the quality and structure of the invoice
-- Fields that cannot be accurately extracted are marked as "N/A"
+- Fields that cannot be accurately extracted are marked with low confidence scores
+- Processing very large batch uploads may require additional system resources
+
+## Recent Updates
+
+- Enhanced UI with improved navigation and alerts system
+- Added confidence score visualization for extraction quality
+- Improved extraction history display and management
+- Fixed issues with file handling and extraction display
+- Optimized backend for better performance and reliability
+- Added transition effects for better user experience
 
 ## License
 

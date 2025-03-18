@@ -1056,6 +1056,29 @@ function updateRecentUploads(recentUploads) {
 }
 
 /**
+ * Fetch recent uploads from the server
+ */
+function fetchRecentUploads() {
+    fetch('/recent_uploads')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Recent uploads data:', data);
+            updateRecentUploads(data.uploads);
+        })
+        .catch(error => {
+            console.error('Error fetching recent uploads:', error);
+        });
+}
+
+// Call fetchRecentUploads to update the recent uploads section
+fetchRecentUploads();
+
+/**
  * Show a summary of batch processing results
  */
 function showBatchProcessingSummary(results) {
