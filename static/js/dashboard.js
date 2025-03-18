@@ -25,23 +25,26 @@ function initDashboard() {
  * Update dashboard statistics with the latest data
  */
 function updateDashboardStats() {
-    // Get stats from localStorage
-    const stats = getProcessingStats();
-    
-    // Update UI elements with stats
-    updateStatCard('totalInvoices', stats.totalInvoices);
-    updateStatCard('averageAccuracy', Math.round(stats.averageAccuracy) + '%');
-    updateStatCard('averageProcessingTime', stats.averageProcessingTime.toFixed(1) + 's');
-    updateStatCard('lastProcessedDate', stats.lastProcessedDate ? new Date(stats.lastProcessedDate).toLocaleDateString() : 'Never');
-    
-    // Update accuracy breakdown
-    updateAccuracyBreakdown(stats);
-    
-    // Update recent invoices table
-    updateRecentInvoices(stats.recentInvoices);
-    
-    // Update charts if they exist
-    updateCharts(stats);
+    // Fetch real-time stats from the server
+    fetch('/dashboard_stats')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(stats => {
+            // Update UI elements with stats
+            updateStatCard('totalInvoices', stats.totalInvoices);
+            updateStatCard('successRate', Math.round(stats.successRate) + '%');
+            updateStatCard('avgProcessingTime', stats.avgProcessingTime.toFixed(1) + 's');
+
+            // Optionally update other elements like charts
+            updateCharts(stats);
+        })
+        .catch(error => {
+            console.error('Error fetching dashboard stats:', error);
+        });
 }
 
 /**

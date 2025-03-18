@@ -435,12 +435,109 @@ def download_excel():
         app.logger.error(f"Error generating Excel file: {str(e)}")
         return jsonify({'error': f'Failed to generate Excel file: {str(e)}'}), 500
 
+@app.route('/recent_uploads')
+def recent_uploads():
+    """Get a list of recent uploads with detailed information"""
+    print("Recent uploads endpoint called")
+    # Set headers to prevent caching
+    response = make_response()
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    
+    if not os.path.exists('results'):
+        print("Results directory does not exist")
+        os.makedirs('results', exist_ok=True)
+        return jsonify({'uploads': []})
+    
+    uploads = []
+    
+    # Get list of all result files
+    result_files = os.listdir('results')
+    print(f"Found {len(result_files)} files in results directory")
+    result_files.sort(reverse=True)  # Sort newest first based on filename
+    
+    for filename in result_files:
+        if not filename.endswith('.json'):
+            continue
+        
+        file_path = os.path.join('results', filename)
+        try:
+            with open(file_path, 'r') as f:
+                data = json.load(f)
+            
+            # Create a summary entry for this upload
+            entry = {
+                'id': filename.replace('.json', ''),
+                'filename': data.get('original_filename', filename.replace('.json', '')),
+                'vendor_name': data.get('company_name', 'Unknown'),
+                'invoice_number': data.get('invoice_number', '-'),
+                'invoice_date': data.get('invoice_date', '-'),
+            }
+            uploads.append(entry)
+        except Exception as e:
+            # Skip files that can't be processed
+            app.logger.error(f"Error loading {filename}: {str(e)}")
+    
+    print(f"Returning {len(uploads)} uploads")
+    # Return in the format expected by the frontend
+    result = {'uploads': uploads}
+    return jsonify(result)
+
+@app.route('/dashboard_stats')
+def dashboard_stats():
+    """Provide real-time statistics for the dashboard cards"""
+    # Calculate total invoices
+    total_invoices = sum(1 for filename in os.listdir('results') if filename.endswith('.json'))
+    
+    # Calculate success rate
+    successful_extractions = 0
+    total_extractions = 0
+    for filename in os.listdir('results'):
+        if filename.endswith('.json'):
+            with open(os.path.join('results', filename), 'r') as f:
+                data = json.load(f)
+                total_extractions += 1
+                if data.get('success', False):
+                    successful_extractions += 1
+    success_rate = (successful_extractions / total_extractions * 100) if total_extractions > 0 else 0
+
+    # Calculate average processing time
+    total_processing_time = sum(data.get('processing_time', 0) for filename in os.listdir('results') if filename.endswith('.json') for data in [json.load(open(os.path.join('results', filename), 'r'))])
+    avg_processing_time = (total_processing_time / total_extractions) if total_extractions > 0 else 0
+
+    # Load previous month's stats
+    try:
+        with open('monthly_stats.json', 'r') as f:
+            previous_stats = json.load(f)
+    except FileNotFoundError:
+        previous_stats = {'totalInvoices': 0, 'successRate': 0, 'avgProcessingTime': 0}
+
+    # Calculate percentage changes
+    change_total_invoices = ((total_invoices - previous_stats['totalInvoices']) / previous_stats['totalInvoices'] * 100) if previous_stats['totalInvoices'] > 0 else 0
+    change_success_rate = ((success_rate - previous_stats['successRate']) / previous_stats['successRate'] * 100) if previous_stats['successRate'] > 0 else 0
+    change_avg_processing_time = ((avg_processing_time - previous_stats['avgProcessingTime']) / previous_stats['avgProcessingTime'] * 100) if previous_stats['avgProcessingTime'] > 0 else 0
+
+    # Save current stats for next month
+    with open('monthly_stats.json', 'w') as f:
+        json.dump({'totalInvoices': total_invoices, 'successRate': success_rate, 'avgProcessingTime': avg_processing_time}, f)
+
+    stats = {
+        'totalInvoices': total_invoices,
+        'successRate': success_rate,
+        'avgProcessingTime': avg_processing_time,
+        'changeTotalInvoices': change_total_invoices,
+        'changeSuccessRate': change_success_rate,
+        'changeAvgProcessingTime': change_avg_processing_time
+    }
+    return jsonify(stats)
+
 if __name__ == '__main__':
     import argparse
     
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Invoice AI Processing System')
-    parser.add_argument('--port', type=int, default=5003, help='Port to run the server on')
+    parser.add_argument('--port', type=int, default=3000, help='Port to run the server on')
     parser.add_argument('--host', type=str, default='0.0.0.0', help='Host to run the server on')
     args = parser.parse_args()
     

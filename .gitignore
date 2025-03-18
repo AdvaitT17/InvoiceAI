@@ -9,3 +9,4 @@ uploads
 extraction_results.json
 pattern_extraction_results.json
 .DS_Store
+monthly_stats.json

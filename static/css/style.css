@@ -244,7 +244,7 @@ h1, h2, h3, h4, h5, h6 {
 /* Stat Cards */
 .dashboard-stats {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    grid-template-columns: repeat(3, 1fr);
     gap: 24px;
     margin-bottom: 24px;
 }

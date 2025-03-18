@@ -12,6 +12,7 @@ import pandas as pd
 import logging
 from typing import Dict, List, Union, Optional, Any, Tuple
 import difflib
+import time
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -719,9 +720,11 @@ def validate_extraction(result, text, pattern_name):
         if not re.search(r'\d', result["invoice_number"]):
             errors.append(f"Invoice number '{result['invoice_number']}' doesn't contain any digits")
             
-        # Remove any "Invoice No." or similar prefix if present
-        if re.match(r'.*[Ii]nvoice\s*[Nn]o\.?\s*:?\s*', result["invoice_number"]):
-            errors.append(f"Invoice number '{result['invoice_number']}' contains 'Invoice No.' prefix")
+        # Remove any non-numeric or non-alphanumeric characters, preserving alphanumeric invoice numbers
+        invoice_num = result["invoice_number"]
+        # Keep the alphanumeric pattern but remove extra symbols like "#", "/", etc.
+        invoice_num = re.sub(r'[^a-zA-Z0-9]', '', invoice_num)
+        result['invoice_number'] = invoice_num
     
     # Product validation
     if "products" in result and isinstance(result["products"], list):
@@ -1127,6 +1130,8 @@ def process_invoice(invoice_path: str, debug_mode=False) -> Dict[str, Any]:
     """
     logger.info(f"Processing invoice: {invoice_path}")
     
+    start_time = time.time()
+    
     try:
         # Extract text from PDF with improved method
         text = extract_text_from_pdf(invoice_path)
@@ -1200,10 +1205,12 @@ def process_invoice(invoice_path: str, debug_mode=False) -> Dict[str, Any]:
                         product[field] = clean_value
         
         # Add metadata to the result
+        processing_time = time.time() - start_time
         final_result = {
             "success": True,
             "pattern_used": pattern_name,
             "confidence_scores": confidence_scores,
+            "processing_time": processing_time,
             **extracted_data  # Include all extracted data
         }
         
