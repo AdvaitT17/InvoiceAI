@@ -120,6 +120,6 @@ python app.py
 - Optimized backend for better performance and reliability
 - Added transition effects for better user experience
 
-## License
+## Author
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+[Advait Thakur](https://github.com/AdvaitT17)

@@ -152,6 +152,37 @@ h1, h2, h3, h4, h5, h6 {
     border-left-color: var(--primary);
 }
 
+/* Sidebar Footer */
+.sidebar-footer {
+    margin-top: auto;
+    padding: 15px 20px;
+    border-top: 1px solid var(--gray-200);
+    background-color: white;
+}
+
+.footer-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+}
+
+.footer-content p {
+    margin: 0;
+    font-size: 12px;
+    color: var(--gray-500);
+    text-align: center;
+}
+
+.footer-content .copyright {
+    font-weight: 500;
+}
+
+.footer-content .version {
+    font-size: 11px;
+    color: var(--gray-400);
+}
+
 /* Main Content */
 .main-content {
     flex: 1;
@@ -567,6 +598,88 @@ h1, h2, h3, h4, h5, h6 {
     border-radius: 20px;
     font-size: 12px;
     font-weight: 500;
+}
+
+/* Redesigned Help & Documentation Section */
+#help {
+    padding: 30px;
+    background-color: var(--gray-100);
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+    transition: var(--transition);
+    margin-bottom: 30px;
+}
+
+#help .section-header h1 {
+    font-size: 28px;
+    color: var(--primary);
+    font-weight: 700;
+    margin-bottom: 15px;
+    border-bottom: 2px solid var(--primary-light);
+    padding-bottom: 10px;
+}
+
+#help .section-description {
+    font-size: 18px;
+    color: var(--gray-700);
+    margin-bottom: 25px;
+    line-height: 1.6;
+}
+
+#help a {
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: 600;
+    transition: var(--transition);
+}
+
+#help a:hover {
+    color: var(--primary-hover);
+    text-decoration: underline;
+}
+
+#help .content {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+#help .content-item {
+    padding: 15px;
+    background-color: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+    transition: var(--transition);
+}
+
+#help .content-item:hover {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* View Extraction Button */
+.view-extraction {
+    background-color: white;
+    color: var(--primary);
+    border: 1px solid var(--primary);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.view-extraction:hover {
+    background-color: var(--primary);
+    color: white;
+    box-shadow: 0 4px 8px rgba(99, 102, 241, 0.25);
+}
+
+.view-extraction i {
+    font-size: 14px;
 }
 
 /* Alert Container */
