@@ -13,6 +13,9 @@ import logging
 from typing import Dict, List, Union, Optional, Any, Tuple
 import difflib
 import time
+from collections import deque
+from threading import Lock
+import random
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -29,6 +32,105 @@ if not GEMINI_API_KEY:
 
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
+
+# Rate limiter for Gemini API
+class RateLimiter:
+    """Rate limiter for API calls with dynamic adjustment based on batch size.
+    
+    Tracks API calls within a time window and provides throttling mechanisms to avoid
+    exceeding API rate limits. Dynamically adjusts throttling based on batch size.
+    """
+    def __init__(self, max_calls_per_min=15, window_size_sec=60):
+        self.max_calls_per_min = max_calls_per_min  # Default for free tier
+        self.window_size_sec = window_size_sec
+        self.calls = deque()
+        self.lock = Lock()
+        self.batch_size = 1  # Default batch size
+        self.failed_files = []  # Track failed files for retry
+        self.current_wait_time = 0  # Current adaptive wait time
+        
+    def set_batch_size(self, batch_size):
+        """Set the batch size to dynamically adjust rate limiting."""
+        with self.lock:
+            self.batch_size = max(1, batch_size)  # Ensure at least 1
+            # Calculate the wait time based on batch size to stay under limits
+            if batch_size > self.max_calls_per_min:
+                # If batch size exceeds max calls per minute, spread out calls
+                self.current_wait_time = (self.window_size_sec / self.max_calls_per_min) * 1.2  # Add 20% buffer
+            else:
+                # Otherwise use minimal wait time with a small buffer
+                self.current_wait_time = (self.window_size_sec / self.max_calls_per_min) * 0.8
+            
+            logger.info(f"Rate limiter adjusted: batch_size={batch_size}, wait_time={self.current_wait_time:.2f}s")
+            
+    def add_failed_file(self, file_path):
+        """Add a file that failed due to rate limiting for later retry."""
+        with self.lock:
+            if file_path not in self.failed_files:
+                self.failed_files.append(file_path)
+                
+    def get_failed_files(self):
+        """Get the list of files that failed due to rate limiting."""
+        with self.lock:
+            return self.failed_files.copy()
+            
+    def clear_failed_files(self):
+        """Clear the list of failed files."""
+        with self.lock:
+            self.failed_files.clear()
+            
+    def wait_if_needed(self, force_wait=False):
+        """Check if we need to wait before making another API call.
+        
+        Args:
+            force_wait: If True, always wait even if under rate limit
+            
+        Returns:
+            bool: True if waited, False if no wait needed
+        """
+        with self.lock:
+            # Clean up old calls outside the window
+            current_time = time.time()
+            while self.calls and current_time - self.calls[0] > self.window_size_sec:
+                self.calls.popleft()
+                
+            # Check if we're at the rate limit
+            call_count = len(self.calls)
+            calls_remaining = self.max_calls_per_min - call_count
+            
+            # Dynamic wait time based on remaining capacity and batch size
+            if force_wait or calls_remaining < 3 or call_count >= (self.max_calls_per_min * 0.8):  # 80% threshold
+                # Add jitter to avoid thundering herd problem (all processes calling at once after waiting)
+                jitter = random.uniform(0.8, 1.2)  
+                wait_time = self.current_wait_time * jitter
+                
+                if calls_remaining <= 1:
+                    # If almost at limit, wait full window to ensure we don't exceed
+                    wait_time = max(wait_time, self.window_size_sec * 0.25)  # At least 25% of window
+                    
+                logger.info(f"Rate limiting: waiting {wait_time:.2f}s ({call_count}/{self.max_calls_per_min} calls used in last minute)")
+                time.sleep(wait_time)
+                return True
+                
+            return False
+            
+    def add_call(self):
+        """Record an API call."""
+        with self.lock:
+            self.calls.append(time.time())
+            
+    def get_utilization(self):
+        """Get current API usage percentage."""
+        with self.lock:
+            # Clean up old calls
+            current_time = time.time()
+            while self.calls and current_time - self.calls[0] > self.window_size_sec:
+                self.calls.popleft()
+                
+            return (len(self.calls) / self.max_calls_per_min) * 100
+
+# Create global rate limiter instance
+rate_limiter = RateLimiter()
 
 # Define common patterns for invoice fields
 PATTERNS = {
@@ -599,7 +701,7 @@ def extract_tables_from_text(text):
     return tables
 
 
-def process_with_gemini(text, pattern_name=None, focus=None, max_attempts=2):
+def process_with_gemini(text, pattern_name=None, focus=None, max_attempts=3, file_path=None):
     """Process extracted text with Gemini AI to extract structured data.
     Uses pattern recognition and focuses on specific sections if needed.
     
@@ -608,6 +710,7 @@ def process_with_gemini(text, pattern_name=None, focus=None, max_attempts=2):
         pattern_name: Optional predefined pattern name to use
         focus: Optional section to focus on ('header', 'products', or None for entire invoice)
         max_attempts: Maximum number of extraction attempts
+        file_path: Path to the invoice file for tracking retries
         
     Returns:
         Structured data as JSON or None if processing failed
@@ -622,14 +725,26 @@ def process_with_gemini(text, pattern_name=None, focus=None, max_attempts=2):
     # Attempt extraction
     attempts = 0
     result = None
+    exponential_backoff = 1  # Initial backoff in seconds
+    max_backoff = 32  # Maximum backoff in seconds
     
     while attempts < max_attempts and not result:
         attempts += 1
         logger.info(f"Attempt {attempts} to extract data using pattern '{pattern_name}'")
         
+        # Check rate limits before making API call
+        rate_limiter.wait_if_needed(force_wait=(attempts > 1))  # Force wait on retry attempts
+        
         try:
+            # Record this API call
+            rate_limiter.add_call()
+            
+            # Make the API call
             response = model.generate_content(prompt)
             raw_result = response.text
+            
+            # Reset backoff on success
+            exponential_backoff = 1
             
             # Clean up the response to extract only the JSON part
             if "```json" in raw_result:
@@ -645,7 +760,7 @@ def process_with_gemini(text, pattern_name=None, focus=None, max_attempts=2):
             if not validation_results['is_valid']:
                 logger.warning(f"Validation failed: {validation_results['errors']}")
                 
-                # If first attempt failed validation, refine the prompt
+                # If attempt failed validation, refine the prompt
                 if attempts < max_attempts:
                     prompt = refine_prompt_based_on_validation(prompt, validation_results['errors'])
                     result = None  # Reset result to trigger another attempt
@@ -670,11 +785,32 @@ def process_with_gemini(text, pattern_name=None, focus=None, max_attempts=2):
                         "invoice_date": common_fields.get("invoice_date", "N/A"),
                         "products": result if isinstance(result, list) else []
                     }
-        
         except Exception as e:
-            logger.error(f"Error in Gemini processing: {e}")
+            error_msg = str(e)
+            logger.error(f"Error in Gemini processing: {error_msg}")
+            
+            # Check for rate limit errors
+            if "429" in error_msg or "Resource has been exhausted" in error_msg:
+                # Add to failed files list for retry
+                if file_path:
+                    rate_limiter.add_failed_file(file_path)
+                
+                # If we're rate limited, use exponential backoff
+                wait_time = exponential_backoff + random.uniform(0, 1)  # Add jitter
+                logger.warning(f"Rate limit exceeded. Backing off for {wait_time:.2f} seconds")
+                time.sleep(wait_time)
+                
+                # Increase backoff for next attempt (exponential)
+                exponential_backoff = min(exponential_backoff * 2, max_backoff)
+            
+            # If we've reached max attempts, give up
             if attempts >= max_attempts:
+                logger.error(f"Failed after {max_attempts} attempts")
                 return None
+            
+            # For non-rate limit errors, add a small delay before retrying
+            if "429" not in error_msg and "Resource has been exhausted" not in error_msg:
+                time.sleep(1)
     
     # Post-process the extraction result
     if result:
@@ -1153,24 +1289,38 @@ def process_invoice(invoice_path: str, debug_mode=False) -> Dict[str, Any]:
         logger.info(f"Identified pattern '{pattern_name}' for {invoice_path}")
         
         # First attempt - process with pattern-specific prompt
-        result = process_with_gemini(text, pattern_name=pattern_name)
+        result = process_with_gemini(text, pattern_name=pattern_name, file_path=invoice_path)
         
         # If first attempt failed, try generic pattern as fallback
         if not result and pattern_name != "generic_invoice":
             logger.info(f"Retrying with generic pattern for {invoice_path}")
-            result = process_with_gemini(text, pattern_name="generic_invoice")
+            result = process_with_gemini(text, pattern_name="generic_invoice", file_path=invoice_path)
         
         if not result:
-            logger.error(f"Gemini processing failed for {invoice_path}")
-            return {
-                "success": False,
-                "error": "Gemini API returned no result",
-                "company_name": "N/A",
-                "invoice_number": "N/A",
-                "fssai_number": "N/A",
-                "invoice_date": "N/A",
-                "products": []
-            }
+            # Check if this was due to rate limiting
+            if invoice_path in rate_limiter.get_failed_files():
+                logger.error(f"Rate limit exceeded for {invoice_path}")
+                return {
+                    "success": False,
+                    "error": "API rate limit exceeded. Please try again later or process fewer files at once.",
+                    "rate_limited": True,
+                    "company_name": "N/A",
+                    "invoice_number": "N/A",
+                    "fssai_number": "N/A",
+                    "invoice_date": "N/A",
+                    "products": []
+                }
+            else:
+                logger.error(f"Gemini processing failed for {invoice_path}")
+                return {
+                    "success": False,
+                    "error": "Gemini API returned no result",
+                    "company_name": "N/A",
+                    "invoice_number": "N/A",
+                    "fssai_number": "N/A",
+                    "invoice_date": "N/A",
+                    "products": []
+                }
         
         # Process the extracted data
         # No need to parse JSON as process_with_gemini now returns Python dict
