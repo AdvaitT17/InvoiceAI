@@ -5,13 +5,14 @@ import os
 import json
 import pandas as pd
 from datetime import datetime
+import time
 from werkzeug.utils import secure_filename
-from invoice_processor import process_invoice
+from invoice_processor import process_invoice, rate_limiter
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['ALLOWED_EXTENSIONS'] = {'pdf'}
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 1024  # 1GB max file size
 
 # Ensure upload directory exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -34,19 +35,44 @@ def upload_file():
     if not files or files[0].filename == '':
         return jsonify({'error': 'No selected files'}), 400
     
+    # Clear any previously failed files
+    rate_limiter.clear_failed_files()
+    
+    # Set the batch size for rate limiting based on number of files
+    batch_size = len(files)
+    rate_limiter.set_batch_size(batch_size)
+    
     # Process each file and collect results
     all_results = []
     success_count = 0
+    rate_limited_files = []
     
-    for file in files:
+    for i, file in enumerate(files):
         if allowed_file(file.filename):
             filename = secure_filename(file.filename)
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(filepath)
             
+            # Log progress
+            print(f"Processing file {i+1}/{len(files)}: {filename}")
+            
             try:
                 # Process the invoice
                 extraction_result = process_invoice(filepath)
+                
+                # Check if processing failed due to rate limiting
+                if not extraction_result['success'] and extraction_result.get('rate_limited', False):
+                    rate_limited_files.append({
+                        'filepath': filepath,
+                        'filename': filename
+                    })
+                    all_results.append({
+                        'success': False,
+                        'filename': filename,
+                        'error': extraction_result['error'],
+                        'rate_limited': True
+                    })
+                    continue
                 
                 # Add timestamp and original filename
                 extraction_result['timestamp'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -101,13 +127,126 @@ def upload_file():
                 'error': 'File type not allowed'
             })
     
+    # Handle retry for rate-limited files if any
+    if rate_limited_files:
+        retry_results = retry_rate_limited_files(rate_limited_files)
+        
+        # Update all_results with retry results
+        for retry_result in retry_results:
+            # Find and replace the original failed result
+            for i, result in enumerate(all_results):
+                if result.get('filename') == retry_result.get('filename') and result.get('rate_limited', False):
+                    all_results[i] = retry_result
+                    if retry_result.get('success', False):
+                        success_count += 1
+                    break
+    
     # Return summary of all processing results
     return jsonify({
         'success': success_count > 0,
         'total_files': len(files),
         'success_count': success_count,
+        'rate_limited_count': len(rate_limited_files),
+        'api_utilization': rate_limiter.get_utilization(),
         'results': all_results
     })
+
+
+def retry_rate_limited_files(failed_files, max_retries=3):
+    """
+    Retry processing for files that failed due to rate limiting.
+    
+    Args:
+        failed_files: List of dictionaries with filepath and filename
+        max_retries: Maximum number of retry attempts
+        
+    Returns:
+        List of results from retry attempts
+    """
+    if not failed_files:
+        return []
+    
+    retry_results = []
+    retry_batch_size = len(failed_files)
+    
+    # Adjust rate limiter for retry batch
+    rate_limiter.set_batch_size(retry_batch_size)
+    
+    # Wait for a cooldown period before retrying (60 seconds = 1 minute window reset)
+    cooldown = 60
+    print(f"Rate limit exceeded. Waiting {cooldown} seconds before retrying {retry_batch_size} files...")
+    time.sleep(cooldown)
+    
+    for retry_file in failed_files:
+        filepath = retry_file['filepath']
+        filename = retry_file['filename']
+        
+        print(f"Retrying rate-limited file: {filename}")
+        
+        # Process with increased wait times
+        try:
+            # Force wait between retries to avoid hitting limits again
+            rate_limiter.wait_if_needed(force_wait=True)
+            
+            # Retry processing
+            extraction_result = process_invoice(filepath)
+            
+            if extraction_result['success']:
+                # Add timestamp and original filename
+                extraction_result['timestamp'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                extraction_result['original_filename'] = filename
+                extraction_result['retry_success'] = True
+                
+                # Save results to a unique JSON file
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                results_filename = f"result_{timestamp}_{filename.split('.')[0]}_retry.json"
+                results_path = os.path.join('results', results_filename)
+                
+                with open(results_path, 'w') as f:
+                    json.dump(extraction_result, f, indent=4)
+                
+                # Structure the result for frontend consumption
+                result_entry = {
+                    'filename': filename,
+                    'success': True,
+                    'retry_success': True,
+                    'result': {
+                        'company_name': extraction_result.get('company_name', '-'),
+                        'invoice_number': extraction_result.get('invoice_number', '-'),
+                        'invoice_date': extraction_result.get('invoice_date', '-'),
+                        'fssai_number': extraction_result.get('fssai_number', '-'),
+                        'products': extraction_result.get('products', []),
+                        'confidence_scores': extraction_result.get('confidence_scores', {
+                            'overall': 0,
+                            'company_name': 0,
+                            'invoice_number': 0,
+                            'fssai_number': 0,
+                            'invoice_date': 0,
+                            'products': 0
+                        }),
+                        'template_used': extraction_result.get('template_used', 'unknown')
+                    }
+                }
+                
+                retry_results.append(result_entry)
+            else:
+                # Still failed after retry
+                retry_results.append({
+                    'success': False,
+                    'filename': filename,
+                    'error': extraction_result.get('error', 'Retry failed'),
+                    'retry_failed': True
+                })
+        
+        except Exception as e:
+            retry_results.append({
+                'success': False,
+                'filename': filename,
+                'error': f"Retry error: {str(e)}",
+                'retry_failed': True
+            })
+    
+    return retry_results
 
 @app.route('/download/<filename>')
 def download_results(filename):
