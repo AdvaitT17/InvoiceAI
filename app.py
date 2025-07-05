@@ -7,12 +7,93 @@ import pandas as pd
 from datetime import datetime
 import time
 from werkzeug.utils import secure_filename
-from invoice_processor import process_invoice, rate_limiter
+try:
+    from invoice_processor_optimized import process_invoice, rate_limiter, health_check, cleanup_cache
+    print("Using optimized invoice processor")
+except ImportError:
+    from invoice_processor import process_invoice, rate_limiter
+    print("Using standard invoice processor")
+    health_check = lambda: {"status": "basic"}
+    cleanup_cache = lambda: None
+import gzip
+from functools import wraps
+import psutil
+import threading
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['ALLOWED_EXTENSIONS'] = {'pdf'}
 app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 1024  # 1GB max file size
+
+# Initialize Flask-Compress
+try:
+    from flask_compress import Compress
+    Compress(app)
+    print("Flask-Compress initialized")
+except ImportError:
+    print("Flask-Compress not available")
+
+# Performance monitoring
+performance_metrics = {
+    'total_requests': 0,
+    'total_processing_time': 0,
+    'average_processing_time': 0,
+    'successful_extractions': 0,
+    'failed_extractions': 0,
+    'cache_hits': 0,
+    'cache_misses': 0
+}
+metrics_lock = threading.Lock()
+
+# Load asset manifest for optimized assets
+ASSET_MANIFEST = {}
+manifest_path = os.path.join(app.static_folder, 'optimized', 'manifest.json')
+if os.path.exists(manifest_path):
+    with open(manifest_path, 'r') as f:
+        ASSET_MANIFEST = json.load(f)
+
+def gzip_response(f):
+    """Decorator to gzip compress responses"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        response = make_response(f(*args, **kwargs))
+        
+        # Check if client accepts gzip
+        accept_encoding = request.headers.get('Accept-Encoding', '')
+        if 'gzip' not in accept_encoding.lower():
+            return response
+            
+        # Only compress text-based responses
+        if response.mimetype.startswith('text/') or response.mimetype == 'application/json':
+            response.data = gzip.compress(response.data)
+            response.headers['Content-Encoding'] = 'gzip'
+            response.headers['Content-Length'] = len(response.data)
+            
+        return response
+    return decorated_function
+
+# Add cache headers for static assets
+@app.after_request
+def add_cache_headers(response):
+    # Cache static assets for 1 year
+    if request.path.startswith('/static/'):
+        response.headers['Cache-Control'] = 'public, max-age=31536000'
+        response.headers['Expires'] = datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
+        
+    # Cache API responses for 5 minutes
+    elif request.path.startswith('/api/'):
+        response.headers['Cache-Control'] = 'public, max-age=300'
+        
+    # Add security headers
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    
+    return response
+
+def get_asset_url(asset_path):
+    """Get the optimized asset URL from manifest"""
+    return ASSET_MANIFEST.get(asset_path, asset_path.replace('.js', '.min.js').replace('.css', '.min.css'))
 
 # Ensure upload directory exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -21,10 +102,26 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
 @app.route('/')
+@gzip_response
 def index():
-    return render_template('index.html')
+    return render_template('index.html', get_asset_url=get_asset_url)
+
+def update_metrics(success: bool, processing_time: float):
+    """Update performance metrics"""
+    with metrics_lock:
+        performance_metrics['total_requests'] += 1
+        performance_metrics['total_processing_time'] += processing_time
+        performance_metrics['average_processing_time'] = (
+            performance_metrics['total_processing_time'] / performance_metrics['total_requests']
+        )
+        
+        if success:
+            performance_metrics['successful_extractions'] += 1
+        else:
+            performance_metrics['failed_extractions'] += 1
 
 @app.route('/upload', methods=['POST'])
+@gzip_response
 def upload_file():
     if 'invoice' not in request.files:
         return jsonify({'error': 'No file part'}), 400
@@ -58,7 +155,12 @@ def upload_file():
             
             try:
                 # Process the invoice
+                start_time = time.time()
                 extraction_result = process_invoice(filepath)
+                processing_time = time.time() - start_time
+                
+                # Update metrics
+                update_metrics(extraction_result.get('success', False), processing_time)
                 
                 # Check if processing failed due to rate limiting
                 if not extraction_result['success'] and extraction_result.get('rate_limited', False):
@@ -670,6 +772,64 @@ def dashboard_stats():
         'changeAvgProcessingTime': change_avg_processing_time
     }
     return jsonify(stats)
+
+# Performance monitoring endpoints
+@app.route('/api/health')
+@gzip_response
+def health_endpoint():
+    """Health check endpoint"""
+    try:
+        system_health = health_check()
+        
+        # System metrics
+        memory_usage = psutil.virtual_memory()
+        cpu_usage = psutil.cpu_percent(interval=1)
+        disk_usage = psutil.disk_usage('/')
+        
+        return jsonify({
+            'status': 'healthy',
+            'system': {
+                'memory_usage': {
+                    'total': memory_usage.total,
+                    'used': memory_usage.used,
+                    'available': memory_usage.available,
+                    'percent': memory_usage.percent
+                },
+                'cpu_usage': cpu_usage,
+                'disk_usage': {
+                    'total': disk_usage.total,
+                    'used': disk_usage.used,
+                    'free': disk_usage.free,
+                    'percent': (disk_usage.used / disk_usage.total) * 100
+                }
+            },
+            'application': system_health,
+            'performance': performance_metrics
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'error': str(e)}), 500
+
+@app.route('/api/metrics')
+@gzip_response
+def metrics_endpoint():
+    """Performance metrics endpoint"""
+    return jsonify(performance_metrics)
+
+@app.route('/api/cleanup-cache', methods=['POST'])
+@gzip_response
+def cleanup_cache_endpoint():
+    """Clean up application cache"""
+    try:
+        cleanup_cache()
+        return jsonify({'status': 'success', 'message': 'Cache cleaned up'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'error': str(e)}), 500
+
+# Service worker for caching
+@app.route('/sw.js')
+def service_worker():
+    """Service worker for client-side caching"""
+    return send_file('static/sw.js', mimetype='application/javascript')
 
 if __name__ == '__main__':
     import argparse

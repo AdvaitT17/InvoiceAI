@@ -1,0 +1,27 @@
+{
+  "name": "workspace",
+  "version": "1.0.0",
+  "description": "A modern Python application that extracts structured data from PDF invoices using OCR and advanced machine learning techniques. The system processes invoices and extracts key information such as company name, invoice number, product details, and more with high accuracy and confidence scores.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "node build_assets.js",
+    "build:watch": "nodemon build_assets.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AdvaitT17/InvoiceAI.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/AdvaitT17/InvoiceAI/issues"
+  },
+  "homepage": "https://github.com/AdvaitT17/InvoiceAI#readme",
+  "devDependencies": {
+    "html-minifier-terser": "^7.2.0",
+    "terser": "^5.43.1",
+    "uglifycss": "^0.0.29"
+  }
+}
